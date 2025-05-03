@@ -1,5 +1,5 @@
 import os
-#import base64
+import base64
 import json
 import subprocess
 from google.oauth2 import service_account
@@ -7,10 +7,8 @@ from googleapiclient.discovery import build
 
 # Load and decode service account JSON
 
-# creds_b64 = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
-# creds_json = base64.b64decode(creds_b64).decode()
-
-creds_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+creds_b64 = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+creds_json = base64.b64decode(creds_b64).decode()
 
 
 with open("temp_creds.json", "w") as f:
