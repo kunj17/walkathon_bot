@@ -1,12 +1,18 @@
 name: Run Walkathon Bot (Persistent)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:       # Manual trigger
+  schedule:
+    - cron: "*/360 * * * *" # Every 6 hours
 
 jobs:
   run-telegram-bot:
+    concurrency:
+      group: telegram-bot
+      cancel-in-progress: true  # Cancel older job if this one starts
+
     runs-on: ubuntu-latest
-    timeout-minutes: 4320  # 3 days max run time
+    timeout-minutes: 359  # Max 3 days
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -26,3 +32,5 @@ jobs:
         run: |
           echo "🔁 Starting Walkathon Bot"
           python walkathon_bot.py
+
+          name: Run Walkathon Bot (Persistent)
