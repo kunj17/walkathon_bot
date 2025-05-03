@@ -68,15 +68,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = {}
 
     if 'awaiting_choice' in state:
-        try:
+        if text.strip().isdigit():
             idx = int(text.strip()) - 1
-            selected = state['matches'][idx]
-            response = format_entry(selected)
-            await update.message.reply_text(response, parse_mode='Markdown')
+            if 0 <= idx < len(state['matches']):
+                selected = state['matches'][idx]
+                response = format_entry(selected)
+                await update.message.reply_text(response, parse_mode='Markdown')
+                del user_state[chat_id]
+                return
+            else:
+                await update.message.reply_text("❗ Invalid number. Please try again.")
+                return
+        elif len(text.strip().split()) >= 2:
+            # Treat as new search query
             del user_state[chat_id]
-        except:
-            await update.message.reply_text("❗ Invalid choice. Please send a valid number.")
-        return
+        else:
+            await update.message.reply_text("❗ Invalid choice. Please enter a number or a new name+city query.")
+            return
 
     # New name+city query
     tokens = text.split()
