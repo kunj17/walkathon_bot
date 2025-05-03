@@ -21,7 +21,7 @@ service = build('sheets', 'v4', credentials=creds)
 
 # Read Sheet
 sheet_id = os.getenv('GOOGLE_SHEET_ID')
-range_name = "01-01-2025 to 05-02-2025"
+range_name = "'01-01-2025 to 05-02-2025'!A1:J"
 result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
 values = result.get("values", [])
 
