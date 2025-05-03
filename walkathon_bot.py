@@ -63,7 +63,7 @@ def format_entry(row):
 # === Handlers ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Welcome! Please send a message like `Patel Frisco` or `Manojbhai Wylie` to check registration."
+        "👋 Welcome! Please send a message like `Patel Frisco` or `Kunj Addison` to check registration."
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -71,17 +71,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     now = time.time()
 
-    if chat_id in user_state:
-        state = user_state[chat_id]
-        if 'timestamp' in state and now - state['timestamp'] > SESSION_TTL:
-            del user_state[chat_id]
-            state = {}
-    else:
+    if chat_id not in user_state:
+        user_state[chat_id] = {}
+    state = user_state[chat_id]
+
+    # Expire session after SESSION_TTL
+    if 'timestamp' in state and now - state['timestamp'] > SESSION_TTL:
+        user_state[chat_id] = {}
         state = {}
 
+    # === Detect new query even if bot is awaiting a choice ===
+    tokens = text.split()
+    if len(tokens) >= 2 and not text.isdigit():
+        name = " ".join(tokens[:-1])
+        city = tokens[-1]
+        matches = fuzzy_match(name, city, registration_data)
+
+        if not matches:
+            await update.message.reply_text(f"No matches found for *{name}* in *{city}*", parse_mode='Markdown')
+            return
+
+        if len(matches) == 1:
+            await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
+        else:
+            reply = f"Found *{len(matches)}* possible registrations:\n\n"
+            for i, row in enumerate(matches, 1):
+                n = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
+                reply += f"{i}. {n} – {row.get('Attendees') or row.get('Atten Additional Family Members', '?')} attendees\n"
+            reply += "\nPlease reply with the number to view details."
+            await update.message.reply_text(reply, parse_mode='Markdown')
+            user_state[chat_id] = {
+                'awaiting_choice': True,
+                'matches': matches,
+                'timestamp': now
+            }
+        return
+
+    # === If awaiting a number and got a digit ===
     if 'awaiting_choice' in state:
         try:
-            idx = int(text.strip()) - 1
+            idx = int(text) - 1
             selected = state['matches'][idx]
             response = format_entry(selected)
             await update.message.reply_text(response, parse_mode='Markdown')
@@ -90,37 +119,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❗ Invalid choice. Please send a valid number.")
         return
 
-    # New name+city query
-    tokens = text.split()
-    if len(tokens) < 2:
-        await update.message.reply_text("❗ Please send in the format: `LastName City` or `FullName City`")
-        return
-
-    name = " ".join(tokens[:-1])
-    city = tokens[-1]
-    matches = fuzzy_match(name, city, registration_data)
-
-    if not matches:
-        await update.message.reply_text(f"No matches found for *{name}* in *{city}*", parse_mode='Markdown')
-        return
-
-    if len(matches) == 1:
-        await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
-    else:
-        reply = f"Found *{len(matches)}* possible registrations:\n\n"
-        for i, row in enumerate(matches, 1):
-            n = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
-            reply += f"{i}. {n} – {row.get('Attendees') or row.get('Atten Additional Family Members', '?')} attendees\n"
-        reply += "\nPlease reply with the number to view details."
-        await update.message.reply_text(reply, parse_mode='Markdown')
-        user_state[chat_id] = {
-            'awaiting_choice': True,
-            'matches': matches,
-            'timestamp': now
-        }
+    # === Fallback ===
+    await update.message.reply_text("❗ Please send in the format: `LastName City` or `FullName City`")
 
 # === App Init ===
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 app.run_polling()
+
