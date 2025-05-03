@@ -29,13 +29,30 @@ def fuzzy_match(name, city, data):
     results = []
     name_lower = name.lower()
     city_lower = city.lower()
+
     for row in data:
-        r_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}".lower()
+        # Main registrant name
+        first = row.get('Registrant First Name', '')
+        last = row.get('Registrant Last Name', '')
+        r_name = f"{first} {last}".lower()
         r_city = row.get('City', '').lower()
-        if fuzz.partial_ratio(name_lower, r_name) >= 80 and city_lower in r_city:
+
+        # Fuzzy match against main name
+        match_main = (
+            fuzz.partial_ratio(name_lower, r_name) >= 80 or
+            fuzz.partial_ratio(name_lower, last.lower()) >= 90
+        )
+
+        # Check family members
+        family_field = row.get('Additional Family Members', '')
+        family_match = any(
+            fuzz.partial_ratio(name_lower, part.strip().lower()) >= 80
+            for part in family_field.split(",") if part.strip()
+        )
+
+        if (match_main or family_match) and city_lower in r_city:
             results.append(row)
-        elif fuzz.partial_ratio(name_lower, row.get('Registrant Last Name', '').lower()) >= 90 and city_lower in r_city:
-            results.append(row)
+
     return results
 
 def format_entry(row):
