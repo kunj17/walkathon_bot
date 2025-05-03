@@ -37,17 +37,28 @@ def fuzzy_match(name, city, data):
             results.append(row)
     return results
 
+# def format_entry(row):
+#     full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
+#     attendees = row.get('Attendees') or row.get('Atten Additional Family Members', '?')
+#     phone = row.get('Phone', 'N/A')
+#     family = row.get('Additional Family Members', 'None')
+#     return f"""✔️ *{full_name}* is registered.
+# 👥 Attendees: {attendees}
+# 📞 Phone: {phone}
+# 👨‍👩‍👧‍👦 Family:
+# {family.strip() if family else 'None'}
+# """
+
 def format_entry(row):
     full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
     attendees = row.get('Attendees') or row.get('Atten Additional Family Members', '?')
-    phone = row.get('Phone', 'N/A')
     family = row.get('Additional Family Members', 'None')
     return f"""✔️ *{full_name}* is registered.
 👥 Attendees: {attendees}
-📞 Phone: {phone}
 👨‍👩‍👧‍👦 Family:
 {family.strip() if family else 'None'}
 """
+
 
 # === Handlers ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
