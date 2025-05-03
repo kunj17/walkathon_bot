@@ -59,6 +59,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     now = time.time()
 
+    # Only trigger if message starts with "b "
+    if not text.lower().startswith("b "):
+        return
+
+    query = text[2:].strip()
+
+    # Expire old session if needed
     if chat_id in user_state:
         state = user_state[chat_id]
         if 'timestamp' in state and now - state['timestamp'] > SESSION_TTL:
@@ -67,9 +74,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         state = {}
 
+    # Handle awaiting choice
     if 'awaiting_choice' in state:
-        if text.strip().isdigit():
-            idx = int(text.strip()) - 1
+        if query.isdigit():
+            idx = int(query) - 1
             if 0 <= idx < len(state['matches']):
                 selected = state['matches'][idx]
                 response = format_entry(selected)
@@ -79,21 +87,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text("❗ Invalid number. Please try again.")
                 return
-        elif len(text.strip().split()) >= 2:
-            # Treat as new search query
+        elif len(query.split()) >= 2:
+            # New query instead of number — clear old state
             del user_state[chat_id]
         else:
-            await update.message.reply_text("❗ Invalid choice. Please enter a number or a new name+city query.")
+            await update.message.reply_text("❗ Invalid input. Please enter a valid number or a new search (e.g., `b Patel Frisco`).")
             return
 
-    # New name+city query
-    tokens = text.split()
+    # Parse new query
+    tokens = query.split()
     if len(tokens) < 2:
-        await update.message.reply_text("❗ Please send in the format: `LastName City` or `FullName City`")
+        await update.message.reply_text("❗ Please send your query in the format: `b LastName City` or `b FullName City`")
         return
 
     name = " ".join(tokens[:-1])
     city = tokens[-1]
+
+    # Partial fuzzy match
     matches = fuzzy_match(name, city, registration_data)
 
     if not matches:
@@ -106,7 +116,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = f"Found *{len(matches)}* possible registrations:\n\n"
         for i, row in enumerate(matches, 1):
             n = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
-            reply += f"{i}. {n} – {row.get('Attendees') or row.get('Atten Additional Family Members', '?')} attendees\n"
+            attendees = row.get('Attendees') or row.get('Atten Additional Family Members', '?')
+            reply += f"{i}. {n} – {attendees} attendees\n"
         reply += "\nPlease reply with the number to view details."
         await update.message.reply_text(reply, parse_mode='Markdown')
 
@@ -116,17 +127,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'timestamp': now
         }
 
+        # Timeout handler after 10s
         async def timeout_warning():
             await asyncio.sleep(10)
             current_state = user_state.get(chat_id, {})
             if 'awaiting_choice' in current_state and current_state['timestamp'] == now:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text="⏳ Waited 10 seconds... no reply received.\n🤖 I'm moving on. If you'd like to try again, just send a name and city!"
+                    text="⏳ Waited 10 seconds... no reply received.\n🤖 I'm moving on. If you'd like to try again, just send a name and city starting with `b`!"
                 )
                 del user_state[chat_id]
 
         asyncio.create_task(timeout_warning())
+
 
 # === App Init ===
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
