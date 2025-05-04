@@ -103,7 +103,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "3️⃣ `b lastname city`\n"
             "4️⃣ `b firstname`\n"
             "5️⃣ `b lastname`\n\n"
-            "➕ Prefixes allowed: e.g., `b hem mck` will find `Hemalkumar McKinney`",
+            "➕ Prefixes allowed: e.g., `b kun add` will find `Kunj Addison`",
             parse_mode='Markdown'
         )
         return
