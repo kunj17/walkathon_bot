@@ -65,15 +65,19 @@ def format_entry(entry):
     row = entry['row']
     full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
     attendees = row.get('Attendees', '?')
+    city = row.get('City', 'Unknown')
     family = row.get('Additional Family Members', 'None').strip()
 
-    msg = f"""✅ *{full_name}* is registered.
+    response = f"""✅ *{full_name}* is registered.
+📍 *City:* {city}
 👥 *Attendees:* {attendees}
 👨‍👩‍👧 *Family Members:*
 {family if family else 'None'}"""
+
     if entry['via_family']:
-        msg += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
-    return msg
+        response += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
+
+    return response
 
 # === Smart Chunked Message Sender ===
 async def send_split_message(text, update):
