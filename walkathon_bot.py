@@ -21,7 +21,7 @@ with open(decrypted_path, 'r') as f:
 
 # === Session Cache ===
 user_state = {}  # chat_id -> dict(state)
-SESSION_TTL = 15  # seconds
+SESSION_TTL = 30  # seconds
 
 # === Matching Logic ===
 def prefix_match(name, city, data):
