@@ -22,7 +22,7 @@
 
 # # === Session cache ===
 # user_state = {}  # chat_id -> dict(state, matches, timestamp)
-# SESSION_TTL = 15  # seconds
+# SESSION_TTL = 30  # seconds
 
 # # === Matching Logic ===
 # def fuzzy_match(name, city, data):
