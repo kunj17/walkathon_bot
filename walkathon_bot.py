@@ -21,7 +21,7 @@ with open(decrypted_path, 'r') as f:
 
 # === Globals ===
 user_state = {}  # chat_id -> dict(state)
-SESSION_TTL = 15  # seconds
+SESSION_TTL = 30  # seconds
 MAX_MSG_LENGTH = 4000  # Telegram safe limit
 
 # === Matching Logic ===
@@ -109,8 +109,8 @@ async def show_formats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 4. `b FirstName` *(shows from all cities)*  
 5. `b LastName` *(shows from all cities)*  
 
-You can also type smartly like:
-- `b hem mck` → Hemal Patel from McKinney
+You can also type like:
+- `b Kun add` → Kunj Patel from Addison
 - `b kunj\naddison` → Will still work!
 """
     await update.message.reply_text(formats, parse_mode='Markdown')
