@@ -20,66 +20,83 @@ decrypted_path = decrypt_file(GPG_PASSPHRASE)
 with open(decrypted_path, 'r') as f:
     registration_data = json.load(f)
 
+# === Session cache with TTL ===
 user_state = {}  # chat_id -> dict(state, matches, timestamp)
-SESSION_TTL = 120  # seconds
+SESSION_TTL = 10  # seconds
 
+# === Matching Logic ===
 def fuzzy_match(name, city, data):
     name_lower = name.lower()
     city_lower = city.lower()
-    results = []
+    direct_strong = []
+    direct_partial = []
+    family_matches = []
 
     for row in data:
-        # Match on main name
-        r_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}".lower()
         r_city = row.get('City', '').lower()
-        if fuzz.partial_ratio(name_lower, r_name) >= 75 and city_lower in r_city:
-            results.append({
-                'row': row,
-                'via_family': False,
-                'matched_family': None
-            })
+        if city_lower not in r_city:
             continue
 
-        # Match on family member names
-        family = row.get('Additional Family Members', '')
+        first = row.get('Registrant First Name', '')
+        last = row.get('Registrant Last Name', '')
+        full_name = f"{first} {last}".strip().lower()
+
+        # Priority 1: Strong full name match
+        if fuzz.token_set_ratio(name_lower, full_name) >= 85:
+            direct_strong.append({'row': row, 'via_family': False, 'matched_family': None})
+            continue
+
+        # Priority 2: Partial name match
+        if fuzz.partial_ratio(name_lower, full_name) >= 75:
+            direct_partial.append({'row': row, 'via_family': False, 'matched_family': None})
+            continue
+
+        # Priority 3: Family match
         matched_family = None
-        for line in family.split('\n'):
-            if fuzz.partial_ratio(name_lower, line.lower()) >= 75 and city_lower in r_city:
+        for line in row.get('Additional Family Members', '').split('\n'):
+            if fuzz.token_set_ratio(name_lower, line.lower()) >= 80:
                 matched_family = line.strip()
                 break
-
         if matched_family:
-            results.append({
-                'row': row,
-                'via_family': True,
-                'matched_family': matched_family
-            })
+            family_matches.append({'row': row, 'via_family': True, 'matched_family': matched_family})
 
-    return results
+    if direct_strong:
+        return direct_strong
+    if direct_partial:
+        return direct_partial
+    if family_matches:
+        return family_matches
+    return []
 
-def format_entry(result):
-    row = result['row']
+# === Format Result ===
+def format_entry(entry):
+    row = entry['row']
     full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
     attendees = row.get('Attendees') or row.get('Atten Additional Family Members', '?')
-    family = row.get('Additional Family Members', 'None').strip()
+    family = row.get('Additional Family Members', 'None')
+    base = f"""✔️ *{full_name}* is registered.
+👥 Attendees: {attendees}
+👨‍👩‍👧‍👦 Family:
+{family.strip() if family else 'None'}"""
+    if entry['via_family']:
+        base += f"\n\n*Matched via family member:* _{entry['matched_family']}_"
+    return base
 
-    match_info = ""
-    if result['via_family']:
-        match_info = f"👫 *Matched via family member:* {result['matched_family']}\n"
-
-    return f"""✅ *{full_name}* is registered.
-{match_info}👥 *Attendees:* {attendees}
-👨‍👩‍👧‍👦 *Family:*\n{family if family else 'None'}"""
-
+# === Handlers ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Welcome! To check registration, type something like:\n`b Patel Frisco` or `b Kunj Addison`"
+        "👋 Welcome! Use `b FullName City` to check registration.\nExample: `b Kunj Addison`"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
     now = time.time()
+
+    if not text.lower().startswith("b "):
+        return  # Ignore unrelated messages
+
+    text = text[2:].strip()
 
     if chat_id in user_state:
         state = user_state[chat_id]
@@ -89,31 +106,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         state = {}
 
-    # Awaiting number?
     if 'awaiting_choice' in state:
-        if text.strip().isdigit():
-            idx = int(text.strip()) - 1
+        if text.isdigit():
+            idx = int(text) - 1
             if 0 <= idx < len(state['matches']):
-                selected = state['matches'][idx]
-                await update.message.reply_text(format_entry(selected), parse_mode='Markdown')
+                await update.message.reply_text(format_entry(state['matches'][idx]), parse_mode='Markdown')
                 del user_state[chat_id]
-                return
             else:
-                await update.message.reply_text("❗ Invalid number. Please try again.")
-                return
-        elif len(text.strip().split()) >= 2 and text.lower().startswith("b "):
-            del user_state[chat_id]  # treat as new query
+                await update.message.reply_text("❗ Invalid number.")
+            return
+        elif len(text.split()) >= 2:
+            del user_state[chat_id]
         else:
-            await update.message.reply_text("❗ Invalid choice. Please enter a number or a new name+city starting with `b`.")
+            await update.message.reply_text("❗ Invalid choice. Send number or new query like `b Kunj Addison`")
             return
 
-    # Only respond to "b " trigger
-    if not text.lower().startswith("b "):
-        return
-
-    tokens = text[2:].strip().split()
+    tokens = text.split()
     if len(tokens) < 2:
-        await update.message.reply_text("❗ Format should be like `b LastName City` or `b FullName City`")
+        await update.message.reply_text("❗ Format: `b LastName City` or `b FullName City`")
         return
 
     name = " ".join(tokens[:-1])
@@ -128,14 +138,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
     else:
         reply = f"Found *{len(matches)}* possible registrations:\n\n"
-        for i, result in enumerate(matches, 1):
-            row = result['row']
-            full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
-            attendees = row.get('Attendees') or row.get('Atten Additional Family Members', '?')
-            if result['via_family']:
-                reply += f"{i}. *{full_name}* (matched via family: {result['matched_family']}) – {attendees} attendees\n"
-            else:
-                reply += f"{i}. *{full_name}* – {attendees} attendees\n"
+        for i, m in enumerate(matches, 1):
+            r = m['row']
+            full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
+            note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
+            reply += f"{i}. {full} – {r.get('Attendees') or '?'} attendees{note}\n"
         reply += "\nPlease reply with the number to view details."
         await update.message.reply_text(reply, parse_mode='Markdown')
 
@@ -146,18 +153,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         async def timeout_warning():
-            await asyncio.sleep(10)
-            current_state = user_state.get(chat_id, {})
-            if 'awaiting_choice' in current_state and current_state['timestamp'] == now:
+            await asyncio.sleep(SESSION_TTL)
+            state = user_state.get(chat_id)
+            if state and state.get('timestamp') == now and state.get('awaiting_choice'):
                 await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="⏳ Waited 10 seconds... no reply received.\n🤖 I'm moving on. Send a name and city again starting with `b` if you'd like to retry!"
+                    chat_id,
+                    "⏳ Waited 10 seconds... no reply received.\n🤖 I'm moving on. Send a new query like `b Patel Frisco`!"
                 )
                 del user_state[chat_id]
 
         asyncio.create_task(timeout_warning())
 
-# === App Init ===
+# === Init Bot ===
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
