@@ -27,19 +27,21 @@ MAX_MSG_LENGTH = 4000  # Telegram safe limit
 # === Matching Logic ===
 def prefix_match(name, city, data):
     name_lower = name.lower()
-    city_lower = city.lower() if city else None
     direct = []
     family = []
 
     for row in data:
         r_city = row.get('City', '').lower()
-        if city_lower and not r_city.startswith(city_lower):
-            continue
-
         r_fname = row.get('Registrant First Name', '').lower()
         r_lname = row.get('Registrant Last Name', '').lower()
         full_name = f"{r_fname} {r_lname}"
 
+        # Case 1: If city is specified
+        if city:
+            if not r_city.startswith(city.lower()):
+                continue
+
+        # Match direct registrant
         if (
             r_fname.startswith(name_lower)
             or r_lname.startswith(name_lower)
@@ -48,6 +50,7 @@ def prefix_match(name, city, data):
             direct.append({'row': row, 'via_family': False, 'matched_family': None})
             continue
 
+        # Match in additional family members
         matched_line = None
         for line in row.get('Additional Family Members', '').split('\n'):
             if line.strip().lower().startswith(name_lower):
@@ -56,9 +59,9 @@ def prefix_match(name, city, data):
         if matched_line:
             family.append({'row': row, 'via_family': True, 'matched_family': matched_line})
 
-    # Sort results by first name
-    sorted_results = sorted(direct if direct else family, key=lambda x: x['row'].get('Registrant First Name', '').lower())
-    return sorted_results
+    return sorted(direct + family, key=lambda x: x['row'].get('Registrant First Name', ''))
+
+
 
 # === Format Result Entry ===
 def format_entry(entry):
