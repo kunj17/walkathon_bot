@@ -20,70 +20,64 @@ decrypted_path = decrypt_file(GPG_PASSPHRASE)
 with open(decrypted_path, 'r') as f:
     registration_data = json.load(f)
 
-# === Session cache ===
+# === Session cache with TTL ===
 user_state = {}  # chat_id -> dict(state, matches, timestamp)
-SESSION_TTL = 10  # seconds
+SESSION_TTL = 15  # seconds
 
 # === Matching Logic ===
 def fuzzy_match(name, city, data):
     name_lower = name.lower()
     city_lower = city.lower()
-    exact_matches = []
-    partial_matches = []
+    direct_strong = []
     family_matches = []
 
     for row in data:
-        r_city = row.get("City", "").lower()
+        r_city = row.get('City', '').lower()
         if city_lower not in r_city:
             continue
 
-        first = row.get("Registrant First Name", "")
-        last = row.get("Registrant Last Name", "")
-        full_name = f"{first} {last}".strip().lower()
-
-        # Exact match (high confidence)
-        if name_lower == full_name:
-            exact_matches.append({'row': row, 'via_family': False, 'matched_family': None})
+        # Direct full name match
+        full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}".lower()
+        if fuzz.token_set_ratio(name_lower, full_name) >= 85:
+            direct_strong.append({'row': row, 'via_family': False, 'matched_family': None})
             continue
 
-        # Close partial match to registrant name
-        if fuzz.token_set_ratio(name_lower, full_name) >= 90:
-            partial_matches.append({'row': row, 'via_family': False, 'matched_family': None})
-            continue
-
-        # Search family members only if not already matched
-        matched_line = None
-        for line in row.get("Additional Family Members", "").split("\n"):
-            if fuzz.token_set_ratio(name_lower, line.lower()) >= 90:
-                matched_line = line.strip()
+        # Check family members
+        matched_family = None
+        for line in row.get('Additional Family Members', '').split('\n'):
+            if fuzz.token_set_ratio(name_lower, line.lower()) >= 85:
+                matched_family = line.strip()
                 break
+        if matched_family:
+            family_matches.append({'row': row, 'via_family': True, 'matched_family': matched_family})
 
-        if matched_line:
-            family_matches.append({'row': row, 'via_family': True, 'matched_family': matched_line})
+    if direct_strong:
+        return direct_strong
+    if family_matches:
+        return family_matches
+    return []
 
-    return exact_matches or partial_matches or family_matches
-
-# === Format Response ===
+# === Format Result ===
 def format_entry(entry):
-    row = entry["row"]
+    row = entry['row']
     full_name = f"{row.get('Registrant First Name', '')} {row.get('Registrant Last Name', '')}"
     attendees = row.get('Attendees') or '?'
-    family_raw = row.get('Additional Family Members', 'None')
-    family_lines = [f"- {line.strip()}" for line in family_raw.strip().split("\n") if line.strip()]
+    family = row.get('Additional Family Members', 'None').strip()
 
-    response = f"""✔️ **{full_name}** is registered."""
-    if entry.get("via_family"):
-        response += f"\n🧑‍🤝‍🧑 **Matched via family member:** *{entry['matched_family']}*"
-    response += f"\n👥 **Attendees:** {attendees}"
-    if family_lines:
-        response += f"\n👨‍👩‍👧‍👦 **Family Members:**\n" + "\n".join(family_lines)
-    else:
-        response += "\n👨‍👩‍👧‍👦 **Family Members:** None"
+    response = f"""✔️ *{full_name}* is registered.
+👥 *Attendees:* {attendees}
+👨‍👩‍👧 *Family:*\n{family if family else 'None'}"""
+
+    if entry['via_family']:
+        response += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
+
     return response
 
 # === Handlers ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Welcome! Use `b FullName City` to check registration.\nExample: `b Kunj Addison`")
+    await update.message.reply_text(
+        "👋 Welcome! Use `b FullName City` to check registration.\nExample: `b Kunj Addison`"
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
@@ -91,7 +85,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
 
     if not text.lower().startswith("b "):
-        return  # Ignore unrelated messages
+        return
 
     text = text[2:].strip()
 
@@ -106,21 +100,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_choice' in state:
         if text.isdigit():
             idx = int(text) - 1
-            if 0 <= idx < len(state['matches']):
-                await update.message.reply_text(format_entry(state['matches'][idx]), parse_mode='Markdown')
+            matches = state.get('matches', [])
+            if 0 <= idx < len(matches):
+                await update.message.reply_text(format_entry(matches[idx]), parse_mode='Markdown')
                 del user_state[chat_id]
+                return
             else:
-                await update.message.reply_text("❗ Invalid number.")
-            return
+                await update.message.reply_text("❗ Invalid number. Please try again.")
+                return
         elif len(text.split()) >= 2:
             del user_state[chat_id]
         else:
-            await update.message.reply_text("❗ Please reply with a number or new search.")
+            await update.message.reply_text("❗ Please reply with a number from the list or a new query.")
             return
 
     tokens = text.split()
     if len(tokens) < 2:
-        await update.message.reply_text("❗ Use format: `b LastName City` or `b FullName City`")
+        await update.message.reply_text("❗ Please use Format: `b LastName City` or `b FullName City`")
         return
 
     name = " ".join(tokens[:-1])
@@ -128,19 +124,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     matches = fuzzy_match(name, city, registration_data)
 
     if not matches:
-        await update.message.reply_text(f"❌ No matches found for *{name}* in *{city}*\n📌 Try refining your input.", parse_mode='Markdown')
+        await update.message.reply_text(
+            f"❌ Sorry, no registration found for *{name}* in *{city}*.\n"
+            "🔍 Please double-check the spelling or try a different family member name.",
+            parse_mode='Markdown'
+        )
         return
 
     if len(matches) == 1:
         await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
     else:
-        reply = f"🔍 Found *{len(matches)}* possible registrations:\n\n"
+        reply = f"🔎 Found *{len(matches)}* possible registrations:\n\n"
         for i, m in enumerate(matches, 1):
             r = m['row']
             full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
             note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
             reply += f"{i}. {full} – {r.get('Attendees') or '?'} attendees{note}\n"
-        reply += "\nPlease reply with the number to view full details."
+        reply += "\n✉️ *Please reply with the number to view full details.*"
         await update.message.reply_text(reply, parse_mode='Markdown')
 
         user_state[chat_id] = {
@@ -155,7 +155,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if state and state.get('timestamp') == now and state.get('awaiting_choice'):
                 await context.bot.send_message(
                     chat_id,
-                    "⏳ Waited 10 seconds... no reply received.\n🤖 I'm moving on. Send a new query like `b Patel Frisco`!"
+                    "⏳ Waited 15 seconds... no reply received.\n🤖 I'm moving on. Send a new query like `b Patel Frisco`!"
                 )
                 del user_state[chat_id]
 
