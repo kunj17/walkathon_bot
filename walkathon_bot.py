@@ -137,9 +137,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = int(text) - 1
         matches = state.get('matches', [])
         if 0 <= idx < len(matches):
+            print(f"✅ User selected #{idx+1} from previous results")
             await update.message.reply_text(format_entry(matches[idx]), parse_mode='Markdown')
             del user_state[chat_id]
         else:
+            print(f"❌ Invalid number: {text}")
             await update.message.reply_text("❗ Invalid number.")
         return
 
@@ -157,15 +159,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         name, city = " ".join(tokens[:-1]), tokens[-1]
 
+    print(f"🔍 Query received: name='{name}' | city='{city}'")
     matches = prefix_match(name, city, registration_data)
 
     if not matches:
+        print("❌ No match found.")
         await update.message.reply_text(
             f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
             parse_mode='Markdown'
         )
         return
 
+    print(f"✅ Match found: {len(matches)} result(s)")
     if len(matches) == 1:
         await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
     else:
