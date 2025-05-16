@@ -63,6 +63,21 @@ def prefix_match(name, city, data):
 
 
 
+def extract_shirt_info(row):
+    sizes = ["SM", "MD", "LG", "XL", "XXL", "Y-LG", "Y-MD", "Y-SM", "Y-XS"]
+    shirt_counts = {}
+    for size in sizes:
+        count = row.get(size)
+        try:
+            count = int(count) if count is not None else 0
+        except ValueError:
+            count = 0
+        if count > 0:
+            shirt_counts[size] = count
+    return shirt_counts
+
+
+
 # === Format Result Entry ===
 def format_entry(entry):
     row = entry['row']
@@ -70,17 +85,30 @@ def format_entry(entry):
     attendees = row.get('Attendees', '?')
     city = row.get('City', 'Unknown')
     family = row.get('Additional Family Members', 'None').strip()
+    shirts = extract_shirt_info(row)
+    total_shirts = sum(shirts.values())
 
     response = f"""✅ *{full_name}* is registered.
 📍 *City:* {city}
 👥 *Attendees:* {attendees}
 👨‍👩‍👧 *Family Members:*
-{family if family else 'None'}"""
+{family if family else 'None'}
+"""
+
+    if shirts:
+        response += "\n👕 *T-Shirts Ordered:*\n"
+        for size, count in shirts.items():
+            response += f"- {size}: {count}\n"
+        response += f"\n📦 *Total T-Shirts:* {total_shirts}\n"
+    else:
+        response += "\n👕 *T-Shirts Ordered:* None\n"
 
     if entry['via_family']:
         response += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
 
     return response
+
+
 
 # === Smart Chunked Message Sender ===
 async def send_split_message(text, update):
