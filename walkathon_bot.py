@@ -85,6 +85,7 @@ def format_entry(entry):
     attendees = row.get('Attendees', '?')
     city = row.get('City', 'Unknown')
     family = row.get('Additional Family Members', 'None').strip()
+    bag_no = row.get('Bag No.', 'N/A')  # <- Read from your new column
     shirts = extract_shirt_info(row)
     total_shirts = sum(shirts.values())
 
@@ -92,17 +93,21 @@ def format_entry(entry):
 📍 *City:* {city}
 👥 *Attendees:* {attendees}
 👨‍👩‍👧 *Family Members:*
-{family if family else 'None'}
-"""
+{family if family else 'None'}"""
 
+    # T-shirt summary
     if shirts:
-        response += "\n👕 *T-Shirts Ordered:*\n"
+        response += "\n\n👕 *T-Shirts Ordered:*\n"
         for size, count in shirts.items():
             response += f"- {size}: {count}\n"
-        response += f"\n📦 *Total T-Shirts:* {total_shirts}\n"
+        response += f"\n📦 *Total T-Shirts:* {total_shirts}"
     else:
-        response += "\n👕 *T-Shirts Ordered:* None\n"
+        response += "\n\n👕 *T-Shirts Ordered:* None"
 
+    # Bag number line
+    response += f"\n🎒 *Bag No.:* {bag_no}"
+
+    # If matched via family member
     if entry['via_family']:
         response += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
 
