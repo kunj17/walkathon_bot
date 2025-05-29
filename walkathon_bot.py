@@ -35,7 +35,12 @@ creds = service_account.Credentials.from_service_account_info(
 sheets_service = build('sheets', 'v4', credentials=creds)
 
 # === Load decrypted registration data ===
-registration_data = decrypt_and_load_json(GPG_PASSPHRASE)
+initial_data = decrypt_and_load_json(GPG_PASSPHRASE)
+
+async def get_current_data():
+    # Always pull the latest from Google Sheet if possible
+    fresh_data = await fetch_latest_data()
+    return fresh_data if fresh_data else initial_data
 
 # === Globals ===
 user_state = {}  # chat_id -> dict(state)
@@ -257,6 +262,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         print(f"🧪 Parsed → name: '{name}' | city: '{city}' | remove: {is_remove}")
 
+        registration_data = await get_current_data()
         matches = prefix_match(name, city, registration_data)
         if not matches:
             await update.message.reply_text(
