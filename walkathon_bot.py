@@ -24,11 +24,9 @@ SHEET_NAME = "01-01-2025 to 05-02-2025"
 GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
 
 # === Google Sheets Setup ===
-
-SERVICE_ACCOUNT_JSON_RAW = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 print("kunj checking0 - " + SERVICE_ACCOUNT_JSON_RAW)
-SERVICE_ACCOUNT_JSON = json.loads(base64.b64decode(SERVICE_ACCOUNT_JSON_RAW).decode('utf-8'))
-print("kunj checking - " + SERVICE_ACCOUNT_JSON_RAW,base64.b64decode(SERVICE_ACCOUNT_JSON_RAW),  SERVICE_ACCOUNT_JSON)
+SERVICE_ACCOUNT_JSON = base64.b64decode(SERVICE_ACCOUNT_JSON_RAW)
+print("kunj checking - " + SERVICE_ACCOUNT_JSON)
 
 creds = service_account.Credentials.from_service_account_info(
     json.loads(SERVICE_ACCOUNT_JSON),
