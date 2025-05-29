@@ -1,5 +1,6 @@
 import gnupg
 import io
+import json
 
 def decrypt_and_load_json(gpg_passphrase, encrypted_path='encrypted_data.json.gpg'):
     gpg = gnupg.GPG()
