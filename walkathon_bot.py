@@ -18,7 +18,7 @@ from googleapiclient.discovery import build
 # === Load env ===
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+SERVICE_ACCOUNT_JSON_RAW = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME = "01-01-2025 to 05-02-2025"
 GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
