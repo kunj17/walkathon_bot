@@ -5,7 +5,7 @@ import base64
 import asyncio
 from dotenv import load_dotenv
 from telegram import Update
-from fecrypt_utils import decrypt_and_load_json
+from decrypt_utils import decrypt_and_load_json
 from telegram.ext import (
     ApplicationBuilder, ContextTypes,
     CommandHandler, MessageHandler, filters
