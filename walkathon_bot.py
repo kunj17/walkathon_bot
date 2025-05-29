@@ -26,7 +26,7 @@ GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
 # === Google Sheets Setup ===
 print("kunj checking0 - " + SERVICE_ACCOUNT_JSON_RAW)
 SERVICE_ACCOUNT_JSON = base64.b64decode(SERVICE_ACCOUNT_JSON_RAW)
-print("kunj checking - " + SERVICE_ACCOUNT_JSON)
+print("kunj checking - " + str(SERVICE_ACCOUNT_JSON))
 
 creds = service_account.Credentials.from_service_account_info(
     json.loads(SERVICE_ACCOUNT_JSON),
