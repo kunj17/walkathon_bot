@@ -5,11 +5,13 @@ import base64
 import asyncio
 from dotenv import load_dotenv
 from telegram import Update
+from fecrypt_utils import decrypt_and_load_json
 from telegram.ext import (
     ApplicationBuilder, ContextTypes,
     CommandHandler, MessageHandler, filters
 )
 import gspread
+import gnupg
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -19,6 +21,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME = os.getenv("SHEET_NAME")
+GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
 
 # === Google Sheets Setup ===
 
@@ -31,7 +34,8 @@ creds = service_account.Credentials.from_service_account_info(
 )
 sheets_service = build('sheets', 'v4', credentials=creds)
 
-
+# === Load decrypted registration data ===
+registration_data = decrypt_and_load_json(GPG_PASSPHRASE)
 
 # === Globals ===
 user_state = {}  # chat_id -> dict(state)
