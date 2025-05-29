@@ -15,6 +15,9 @@ from decrypt_utils import decrypt_file
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
+SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+SHEET_NAME = os.getenv("SHEET_NAME")
 
 decrypted_path = decrypt_file(GPG_PASSPHRASE)
 with open(decrypted_path, 'r') as f:
