@@ -312,6 +312,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tokens = text[2:].strip().split()
     name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
+    registration_data = await get_current_data()
     matches = prefix_match(name, city, registration_data)
 
     if not matches:
