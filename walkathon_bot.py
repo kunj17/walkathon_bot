@@ -64,6 +64,7 @@ def format_entry(entry):
     bag_no = row.get('Bag No.', 'N/A')
     shirts = extract_shirt_info(row)
     total_shirts = sum(shirts.values())
+    pickup = row.get('Pickup', '').strip().lower()
 
     response = f"""✅ *{full_name}* is registered.
 📍 *City:* {city}
@@ -80,6 +81,11 @@ def format_entry(entry):
         response += "\n\n👕 *T-Shirts Ordered:* None"
 
     response += f"\n🎒 *Bag No.:* {bag_no}"
+
+    if pickup == 'yes':
+        response += f"\n\n✅ *Picked Up:* Yes"
+    else:
+        response += f"\n\n❌ *Picked Up:* No"
 
     if entry['via_family']:
         response += f"\n🧑‍🤝‍🧑 *Matched via family member:* *{entry['matched_family']}*"
@@ -185,8 +191,6 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - `b FirstName City`
 - `b FirstName LastName City`
 - `b LastName City`
-- `b FirstName` *(any city)*
-- `b LastName` *(any city)*
 - `b Kun add` *(partial match)*
 - `b kunj\\naddison` *(multi-line input)*
 - `b format` *(show this)*
@@ -261,14 +265,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        value = "" if is_remove else "Yes"
+        value = "No" if is_remove else "Yes"
 
         if len(matches) == 1:
             update_pickup_column(matches[0]['row'], value)
             await update.message.reply_text(
-                f"✅ *{name}* {'removed from' if is_remove else 'marked for'} pickup.",
+                f"✅ *{name}* pickup status set to *{value}*.",
                 parse_mode='Markdown'
             )
+
         else:
             reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
             for i, m in enumerate(matches, 1):
