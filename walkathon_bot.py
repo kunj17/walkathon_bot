@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import base64
 import asyncio
 from dotenv import load_dotenv
 from telegram import Update
@@ -20,11 +21,17 @@ SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME = os.getenv("SHEET_NAME")
 
 # === Google Sheets Setup ===
+
+SERVICE_ACCOUNT_JSON_RAW = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+SERVICE_ACCOUNT_JSON = base64.b64decode(SERVICE_ACCOUNT_JSON_RAW).decode()
+
 creds = service_account.Credentials.from_service_account_info(
     json.loads(SERVICE_ACCOUNT_JSON),
     scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
 sheets_service = build('sheets', 'v4', credentials=creds)
+
+
 
 # === Globals ===
 user_state = {}  # chat_id -> dict(state)
