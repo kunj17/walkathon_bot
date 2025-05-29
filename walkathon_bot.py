@@ -20,13 +20,14 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-SHEET_NAME = os.getenv("SHEET_NAME")
+SHEET_NAME = "01-01-2025 to 05-02-2025"
 GPG_PASSPHRASE = os.getenv("GPG_PASSPHRASE")
 
 # === Google Sheets Setup ===
 
 SERVICE_ACCOUNT_JSON_RAW = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 SERVICE_ACCOUNT_JSON = json.loads(base64.b64decode(SERVICE_ACCOUNT_JSON_RAW).decode('utf-8'))
+print("kunj checking - " + SERVICE_ACCOUNT_JSON_RAW,base64.b64decode(SERVICE_ACCOUNT_JSON_RAW),  SERVICE_ACCOUNT_JSON)
 
 creds = service_account.Credentials.from_service_account_info(
     json.loads(SERVICE_ACCOUNT_JSON),
