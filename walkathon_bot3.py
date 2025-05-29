@@ -9,7 +9,8 @@ from telegram.ext import (
     CommandHandler, MessageHandler, filters
 )
 import gspread
-from decrypt_utils import decrypt_file
+from decrypt_utils import decrypt_file,decrypt_and_load_json
+
 
 # === Load env + decrypt data ===
 load_dotenv()
@@ -19,9 +20,7 @@ SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME = os.getenv("SHEET_NAME")
 
-decrypted_path = decrypt_file(GPG_PASSPHRASE)
-with open(decrypted_path, 'r') as f:
-    registration_data = json.load(f)
+registration_data = decrypt_and_load_json(GPG_PASSPHRASE)
 
 # === Google Sheet Setup ===
 gc = gspread.service_account(filename=os.getenv("SERVICE_ACCOUNT_FILE"))
