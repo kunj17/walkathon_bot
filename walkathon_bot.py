@@ -140,7 +140,7 @@ async def fetch_latest_data():
         print(f"❌ Failed to fetch live sheet: {e}")
         return []
 
-def update_pickup_column(row, value):
+def update_sheet_column(row, column_name, value):
     try:
         all_data = sheets_service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
@@ -155,7 +155,7 @@ def update_pickup_column(row, value):
                 and record.get('Registrant Last Name') == row.get('Registrant Last Name')
                 and record.get('City') == row.get('City')
             ):
-                col_index = headers.index("Pickup") + 1
+                col_index = headers.index(column_name) + 1
                 sheets_service.spreadsheets().values().update(
                     spreadsheetId=SHEET_ID,
                     range=f"'{SHEET_NAME}'!{chr(64 + col_index)}{idx}",
@@ -166,6 +166,11 @@ def update_pickup_column(row, value):
     except Exception as e:
         print(f"❌ Error updating sheet: {e}")
     return False
+
+def bag_match(bag_number, data):
+    return [ {'row': row, 'via_family': False, 'matched_family': None}
+             for row in data if row.get('Bag No.', '').strip().lower() == bag_number.lower() ]
+
 
 async def send_split_message(text, update):
     lines = text.strip().split('\n')
@@ -243,7 +248,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_remove = state.get('is_remove', False)
         if 0 <= idx < len(matches):
             value = "" if is_remove else "Yes"
-            update_pickup_column(matches[idx]['row'], value)
+            update_sheet_column(matches[idx]['row'], value)
             name = matches[idx]['row'].get('Registrant First Name', '')
             await update.message.reply_text(
                 f"✅ *{name}* {'removed from' if is_remove else 'marked for'} pickup.",
@@ -254,6 +259,90 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del user_state[chat_id]
         return
 
+    if text.lower().startswith("p ") and text[2:].strip().isdigit():
+        bag_number = text[2:].strip()
+        registration_data = await get_current_data()
+        matches = bag_match(bag_number, registration_data)
+
+        if not matches:
+            await update.message.reply_text(
+                f"❌ No match found for *Bag No. {bag_number}*.",
+                parse_mode='Markdown'
+            )
+            return
+
+        update_sheet_column(matches[0]['row'], "Pickup", "Yes")
+        name = matches[0]['row'].get('Registrant First Name', '')
+        await update.message.reply_text(
+            f"✅ *{name}* marked as picked up via Bag No. *{bag_number}*.",
+            parse_mode='Markdown'
+        )
+        return
+
+
+    if text.lower().startswith("u "):
+        query = text[2:].strip()
+        tokens = query.split()
+        name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
+
+        registration_data = await get_current_data()
+        matches = prefix_match(name, city, registration_data)
+
+        if not matches:
+            await update.message.reply_text(
+                f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
+                parse_mode='Markdown'
+            )
+            return
+
+        if len(matches) == 1:
+            update_sheet_column(matches[0]['row'], "Checked In", "Yes")
+            await update.message.reply_text(
+                f"✅ *{name}* marked as *Checked In*.",
+                parse_mode='Markdown'
+            )
+        else:
+            reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
+            for i, m in enumerate(matches, 1):
+                r = m['row']
+                full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
+                city_name = r.get('City', '?')
+                note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
+                reply += f"{i}. *{full}* — {city_name}{note}\n"
+            reply += "\n✉️ Reply with the number to mark as *Checked In*."
+
+            await send_split_message(reply, update)
+            user_state[chat_id] = {
+                'awaiting_checkin': True,
+                'matches': matches,
+                'timestamp': now
+            }
+
+            async def timeout_clear():
+                await asyncio.sleep(SESSION_TTL)
+                if user_state.get(chat_id, {}).get('timestamp') == now:
+                    await context.bot.send_message(chat_id, "⏳ Timeout. Send a new query.")
+                    user_state.pop(chat_id, None)
+
+            asyncio.create_task(timeout_clear())
+        return
+
+    if 'awaiting_checkin' in state and text.isdigit():
+        idx = int(text) - 1
+        matches = state.get('matches', [])
+        if 0 <= idx < len(matches):
+            update_sheet_column(matches[idx]['row'], "Checked In", "Yes")
+            name = matches[idx]['row'].get('Registrant First Name', '')
+            await update.message.reply_text(
+                f"✅ *{name}* marked as *Checked In*.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("❗ Invalid number.")
+        del user_state[chat_id]
+        return
+
+    
     if text.lower().startswith("p "):
         is_remove = text.lower().startswith("p remove")
         query = text[9:] if is_remove else text[2:]
@@ -274,7 +363,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         value = "No" if is_remove else "Yes"
 
         if len(matches) == 1:
-            update_pickup_column(matches[0]['row'], value)
+            update_sheet_column(matches[0]['row'], value)
             await update.message.reply_text(
                 f"✅ *{name}* pickup status set to *{value}*.",
                 parse_mode='Markdown'
