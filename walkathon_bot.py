@@ -280,61 +280,68 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-    if text.lower().startswith("u "):
-        query = text[2:].strip()
-        tokens = query.split()
-        name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
+    is_remove = text.lower().startswith("u remove")
+    query = text[9:] if is_remove else text[2:]
+    tokens = query.strip().split()
+    name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
 
-        registration_data = await get_current_data()
-        matches = prefix_match(name, city, registration_data)
+    registration_data = await get_current_data()
+    matches = prefix_match(name, city, registration_data)
 
-        if not matches:
-            await update.message.reply_text(
-                f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
-                parse_mode='Markdown'
-            )
-            return
+    if not matches:
+        await update.message.reply_text(
+            f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
+            parse_mode='Markdown'
+        )
+        return
 
-        if len(matches) == 1:
+    value = "" if is_remove else "No"
+
+    if len(matches) == 1:
             update_sheet_column(matches[0]['row'], "Checked In", "Yes")
             await update.message.reply_text(
                 f"✅ *{name}* marked as *Checked In*.",
                 parse_mode='Markdown'
             )
-        else:
-            reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
-            for i, m in enumerate(matches, 1):
-                r = m['row']
-                full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
-                city_name = r.get('City', '?')
-                note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
-                reply += f"{i}. *{full}* — {city_name}{note}\n"
-            reply += "\n✉️ Reply with the number to mark as *Checked In*."
+    else:
+        reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
+        for i, m in enumerate(matches, 1):
+            r = m['row']
+            full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
+            city_name = r.get('City', '?')
+            note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
+            reply += f"{i}. *{full}* — {city_name}{note}\n"
+        reply += "\n✉️ Reply with the number to mark as *Checked In*."
 
-            await send_split_message(reply, update)
-            user_state[chat_id] = {
-                'awaiting_checkin': True,
-                'matches': matches,
-                'timestamp': now
-            }
+        await send_split_message(reply, update)
+        user_state[chat_id] = {
+            'awaiting_checkin': True,
+            'matches': matches,
+            'timestamp': now,
+            'is_remove': is_remove
+        }
 
-            async def timeout_clear():
-                await asyncio.sleep(SESSION_TTL)
-                if user_state.get(chat_id, {}).get('timestamp') == now:
-                    await context.bot.send_message(chat_id, "⏳ Timeout. Send a new query.")
-                    user_state.pop(chat_id, None)
+        async def timeout_clear():
+            await asyncio.sleep(SESSION_TTL)
+            if user_state.get(chat_id, {}).get('timestamp') == now:
+                await context.bot.send_message(chat_id, "⏳ Timeout. Send a new query.")
+                user_state.pop(chat_id, None)
 
-            asyncio.create_task(timeout_clear())
-        return
+        asyncio.create_task(timeout_clear())
+    return
 
     if 'awaiting_checkin' in state and text.isdigit():
         idx = int(text) - 1
         matches = state.get('matches', [])
         if 0 <= idx < len(matches):
-            update_sheet_column(matches[idx]['row'], "Checked In", "Yes")
-            name = matches[idx]['row'].get('Registrant First Name', '')
+            row = matches[idx]['row']
+            value = "" if state.get('is_remove') else "No"
+            update_sheet_column(row, "Pickup", value)
+            name = row.get('Registrant First Name', '')
+            bag_no = row.get("Bag No.", "N/A")
+            status = "removed from pickup" if state.get('is_remove') else "marked as Checked In (No Pickup)"
             await update.message.reply_text(
-                f"✅ *{name}* marked as *Checked In*.",
+                f"✅ *{name}* {status}. For Bag No: *{bag_no}*.",
                 parse_mode='Markdown'
             )
         else:
