@@ -363,7 +363,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         value = "No" if is_remove else "Yes"
 
         if len(matches) == 1:
-            update_sheet_column(matches[0]['row'], value)
+            update_sheet_column(matches[0]['row'], "Pickup", value)
             await update.message.reply_text(
                 f"✅ *{name}* pickup status set to *{value}*.",
                 parse_mode='Markdown'
