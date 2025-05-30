@@ -358,34 +358,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # === Handle "u ..." and "u remove ..." ===
-if text.lower().startswith("u "):
-    is_remove = text.lower().startswith("u remove")
-    query = text[9:] if is_remove else text[2:]
-    query = query.strip().rstrip(".")
-
-    # ✅ Check if input is just a Bag No
-    if query.isdigit():
-        bag_number = query
-        registration_data = await get_current_data()
-        matches = bag_match(bag_number, registration_data)
-
-        if not matches:
+    if text.lower().startswith("u "):
+        is_remove = text.lower().startswith("u remove")
+        query = text[9:] if is_remove else text[2:]
+        query = query.strip().rstrip(".")
+    
+        # ✅ Check if input is just a Bag No
+        if query.isdigit():
+            bag_number = query
+            registration_data = await get_current_data()
+            matches = bag_match(bag_number, registration_data)
+    
+            if not matches:
+                await update.message.reply_text(
+                    f"❌ No match found for *Bag No. {bag_number}*.",
+                    parse_mode='Markdown'
+                )
+                return
+    
+            row = matches[0]['row']
+            value = "" if is_remove else "No"
+            update_sheet_column(row, "Pickup", value)
+            name = row.get("Registrant First Name", "")
+            status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
             await update.message.reply_text(
-                f"❌ No match found for *Bag No. {bag_number}*.",
+                f"✅ *{name}* {status}. For Bag No: *{bag_number}*.",
                 parse_mode='Markdown'
             )
             return
-
-        row = matches[0]['row']
-        value = "" if is_remove else "No"
-        update_sheet_column(row, "Pickup", value)
-        name = row.get("Registrant First Name", "")
-        status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
-        await update.message.reply_text(
-            f"✅ *{name}* {status}. For Bag No: *{bag_number}*.",
-            parse_mode='Markdown'
-        )
-        return
 
     # ✅ Otherwise, treat input as name/city
     tokens = query.split()
@@ -434,63 +434,62 @@ if text.lower().startswith("u "):
         asyncio.create_task(_timeout_clear(chat_id, context))
     return
 
+
     # === Handle "b ..." ===
-if not text.lower().startswith("b "):
-    return
-
-query = text[2:].strip().rstrip(".")
-
-# ✅ If it's a number, treat it as Bag No. lookup
-if query.isdigit():
-    bag_number = query
-    registration_data = await get_current_data()
-    matches = bag_match(bag_number, registration_data)
-
-    if not matches:
-        await update.message.reply_text(
-            f"❌ No registration found for *Bag No: {bag_number}*.",
-            parse_mode='Markdown'
-        )
+    if text.lower().startswith("b "):
+        query = text[2:].strip().rstrip(".")
+    
+        if query.isdigit():
+            bag_number = query
+            registration_data = await get_current_data()
+            matches = bag_match(bag_number, registration_data)
+    
+            if not matches:
+                await update.message.reply_text(
+                    f"❌ No registration found for *Bag No: {bag_number}*.",
+                    parse_mode='Markdown'
+                )
+                return
+    
+            await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
+            return
+    
+        tokens = query.split()
+        name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
+    
+        registration_data = await get_current_data()
+        matches = prefix_match(name, city, registration_data)
+    
+        if not matches:
+            await update.message.reply_text(
+                f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
+                parse_mode='Markdown'
+            )
+            return
+    
+        if len(matches) == 1:
+            await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
+        else:
+            reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
+            for i, m in enumerate(matches, 1):
+                r = m['row']
+                full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
+                city_name = r.get('City', '?')
+                attendees = r.get('Attendees', '?')
+                note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
+                reply += f"{i}. *{full}* — {attendees} attendees – {city_name}{note}\n"
+            reply += "\n✉️ *Reply with the number to see full details.*"
+    
+            await send_split_message(reply, update)
+            user_state[chat_id] = {
+                'awaiting_choice': True,
+                'matches': matches,
+                'timestamp': now
+            }
+    
+            asyncio.create_task(_timeout_clear(chat_id, context))
         return
-
-    await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
-    return
-
-# ✅ Otherwise, normal name + city match
-tokens = query.split()
-name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
-
-registration_data = await get_current_data()
-matches = prefix_match(name, city, registration_data)
-
-if not matches:
-    await update.message.reply_text(
-        f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
-        parse_mode='Markdown'
-    )
-    return
-
-if len(matches) == 1:
-    await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
-else:
-    reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
-    for i, m in enumerate(matches, 1):
-        r = m['row']
-        full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
-        city_name = r.get('City', '?')
-        attendees = r.get('Attendees', '?')
-        note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
-        reply += f"{i}. *{full}* — {attendees} attendees – {city_name}{note}\n"
-    reply += "\n✉️ *Reply with the number to see full details.*"
-
-    await send_split_message(reply, update)
-    user_state[chat_id] = {
-        'awaiting_choice': True,
-        'matches': matches,
-        'timestamp': now
-    }
-
-    asyncio.create_task(_timeout_clear(chat_id, context))
+    
 
 # === Helper timeout function ===
 async def _timeout_clear(chat_id, context):
