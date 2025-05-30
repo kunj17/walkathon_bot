@@ -439,6 +439,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.lower().startswith("b "):
         query = text[2:].strip().rstrip(".")
     
+        # ✅ If it's a number, treat it as Bag No. lookup
         if query.isdigit():
             bag_number = query
             registration_data = await get_current_data()
@@ -454,6 +455,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(format_entry(matches[0]), parse_mode='Markdown')
             return
     
+        # ✅ Otherwise, normal name + city match
         tokens = query.split()
         name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
     
@@ -488,7 +490,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
     
             asyncio.create_task(_timeout_clear(chat_id, context))
-        return
+        return  # ✅ make sure to end this block
+
     
 
 # === Helper timeout function ===
