@@ -380,59 +380,60 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             value = "" if is_remove else "No"
             update_sheet_column(row, "Pickup", value)
             name = row.get("Registrant First Name", "")
+            bag_no = row.get("Bag No.", "N/A")
             status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
             await update.message.reply_text(
-                f"✅ *{name}* {status}. For Bag No: *{bag_number}*.",
+                f"✅ *{name}* {status}. For Bag No: *{bag_no}*.",
                 parse_mode='Markdown'
             )
             return
-
-    # ✅ Otherwise, treat input as name/city
-    tokens = query.split()
-    name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
-
-    registration_data = await get_current_data()
-    matches = prefix_match(name, city, registration_data)
-
-    if not matches:
-        await update.message.reply_text(
-            f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
-            parse_mode='Markdown'
-        )
+    
+        # ✅ Otherwise, treat input as name/city
+        tokens = query.split()
+        name, city = (tokens[0], None) if len(tokens) == 1 else (" ".join(tokens[:-1]), tokens[-1])
+    
+        registration_data = await get_current_data()
+        matches = prefix_match(name, city, registration_data)
+    
+        if not matches:
+            await update.message.reply_text(
+                f"❌ No matches found for *{name}* in *{city or 'any city'}*.",
+                parse_mode='Markdown'
+            )
+            return
+    
+        value = "" if is_remove else "No"
+    
+        if len(matches) == 1:
+            row = matches[0]['row']
+            update_sheet_column(row, "Pickup", value)
+            name = row.get("Registrant First Name", "")
+            bag_no = row.get("Bag No.", "N/A")
+            status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
+            await update.message.reply_text(
+                f"✅ *{name}* {status}. For Bag No: *{bag_no}*.",
+                parse_mode='Markdown'
+            )
+        else:
+            reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
+            for i, m in enumerate(matches, 1):
+                r = m['row']
+                full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
+                city_name = r.get('City', '?')
+                note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
+                reply += f"{i}. *{full}* — {city_name}{note}\n"
+            reply += f"\n✉️ Reply with the number to mark as *Checked In (No Pickup)*."
+    
+            await send_split_message(reply, update)
+            user_state[chat_id] = {
+                'awaiting_checkin': True,
+                'matches': matches,
+                'timestamp': now,
+                'is_remove': is_remove
+            }
+    
+            asyncio.create_task(_timeout_clear(chat_id, context))
         return
-
-    value = "" if is_remove else "No"
-
-    if len(matches) == 1:
-        row = matches[0]['row']
-        update_sheet_column(row, "Pickup", value)
-        name = row.get("Registrant First Name", "")
-        bag_no = row.get("Bag No.", "N/A")
-        status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
-        await update.message.reply_text(
-            f"✅ *{name}* {status}. For Bag No: *{bag_no}*.",
-            parse_mode='Markdown'
-        )
-    else:
-        reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
-        for i, m in enumerate(matches, 1):
-            r = m['row']
-            full = f"{r.get('Registrant First Name', '')} {r.get('Registrant Last Name', '')}"
-            city_name = r.get('City', '?')
-            note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
-            reply += f"{i}. *{full}* — {city_name}{note}\n"
-        reply += f"\n✉️ Reply with the number to mark as *Checked In (No Pickup)*."
-
-        await send_split_message(reply, update)
-        user_state[chat_id] = {
-            'awaiting_checkin': True,
-            'matches': matches,
-            'timestamp': now,
-            'is_remove': is_remove
-        }
-
-        asyncio.create_task(_timeout_clear(chat_id, context))
-    return
 
 
     # === Handle "b ..." ===
