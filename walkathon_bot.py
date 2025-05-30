@@ -280,6 +280,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
+    if text.lower().startswith("u "):
     is_remove = text.lower().startswith("u remove")
     query = text[9:] if is_remove else text[2:]
     tokens = query.strip().split()
@@ -298,11 +299,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     value = "" if is_remove else "No"
 
     if len(matches) == 1:
-            update_sheet_column(matches[0]['row'], "Checked In", "Yes")
-            await update.message.reply_text(
-                f"✅ *{name}* marked as *Checked In*.",
-                parse_mode='Markdown'
-            )
+        row = matches[0]['row']
+        update_sheet_column(row, "Pickup", value)
+        bag_no = row.get("Bag No.", "N/A")
+        name = row.get("Registrant First Name", "")
+        status = "removed from pickup" if is_remove else "marked as Checked In (No Pickup)"
+        await update.message.reply_text(
+            f"✅ *{name}* {status}. For Bag No: *{bag_no}*.",
+            parse_mode='Markdown'
+        )
     else:
         reply = f"🔎 *Found {len(matches)} possible matches:*\n\n"
         for i, m in enumerate(matches, 1):
@@ -311,7 +316,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             city_name = r.get('City', '?')
             note = f" _(via family: {m['matched_family']})_" if m['via_family'] else ""
             reply += f"{i}. *{full}* — {city_name}{note}\n"
-        reply += "\n✉️ Reply with the number to mark as *Checked In*."
+        reply += "\n✉️ Reply with the number to mark as *Checked In (No Pickup)*."
 
         await send_split_message(reply, update)
         user_state[chat_id] = {
@@ -329,6 +334,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         asyncio.create_task(timeout_clear())
     return
+
 
     if 'awaiting_checkin' in state and text.isdigit():
         idx = int(text) - 1
