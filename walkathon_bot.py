@@ -220,6 +220,29 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
+async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = await get_current_data()
+    picked_up = 0
+    not_picked_up = 0
+
+    for row in data:
+        pickup = row.get("Pickup", "").strip().lower()
+        if pickup == "yes":
+            picked_up += 1
+        elif pickup == "no":
+            not_picked_up += 1
+
+    total = picked_up + not_picked_up
+
+    summary = f"""📊 *Pickup Summary*
+
+✅ Picked Up: *{picked_up}*
+❌ Not Picked Up: *{not_picked_up}*
+📦 Total Processed (Yes + No): *{total}*
+"""
+    await update.message.reply_text(summary, parse_mode='Markdown')
+
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().replace('\n', ' ')
@@ -511,4 +534,5 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", show_help))
 app.add_handler(CommandHandler("format", show_help))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(CommandHandler("summary", show_summary))
 app.run_polling()
