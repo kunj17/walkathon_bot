@@ -239,7 +239,7 @@ async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ✅ Picked Up: *{picked_up}*
 ❌ Not Picked Up: *{not_picked_up}*
-📦 Total Processed: *{total}*
+📦 Total Bags: *{total}*
 
 📈 *Completion:* *{pickup_percent:.2f}%*
 """
